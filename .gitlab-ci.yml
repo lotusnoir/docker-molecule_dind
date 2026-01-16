@@ -1,0 +1,92 @@
+---
+stages:
+  - test
+  - push
+
+variables:
+  OS_TYPE: dind
+  CI_REGISTRY_URL: registry-test
+  CI_REGISTRY_USER: CI
+  REGISTRY_IMG_TAG: ${CI_REGISTRY_URL}.${COMPANY_DOMAIN}/docker_images/docker-molecule_${OS_TYPE}:latest
+  DOCKERHUB_TAG: ${DOCKERHUB_USER}/ansible_molecule_test_images:${OS_TYPE}
+  DOCKERHUB_USER: lotusnoir
+  GITHUB_USER: lotusnoir
+
+##################################################
+# TEST BUILD
+##################################################
+test_build:
+  stage: test
+  image: docker:29
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - docker info # check that the CI has access to Docker
+    - docker build -t test-build-${OS_TYPE} .
+    - docker stop test-${OS_TYPE} || true
+    - docker rm test-${OS_TYPE} || true
+    - docker run -d --privileged --name test-${OS_TYPE} test-build-${OS_TYPE}
+    - sleep 20
+    - docker exec test-${OS_TYPE} docker info
+    - docker stop test-${OS_TYPE} || true
+    - docker rm test-${OS_TYPE} || true
+
+##################################################
+# PUSH CODE AND IMAGE
+##################################################
+#push_img_on_gitlab:
+#  stage: push
+#  image: docker:latest
+#  needs: ["test_build"]
+#  before_script:
+#    - docker info
+#    - echo "${CI_REGISTRY_USER} ${CI_REGISTRY_TOKEN} ${CI_REGISTRY_URL}.${COMPANY_DOMAIN}"
+#    - docker login -u "${CI_REGISTRY_USER}" -p "${CI_REGISTRY_TOKEN}" "${CI_REGISTRY_URL}.${COMPANY_DOMAIN}"
+#  script:
+#    - docker build -t "${REGISTRY_IMG_TAG}" .
+#    - docker push "${REGISTRY_IMG_TAG}"
+
+push_img_on_dockerhub:
+  stage: push
+  image:
+    docker:latest
+    #rules:
+    #  - if: $CI_COMMIT_BRANCH == "main"
+    #    changes:
+    #      - Dockerfile
+  needs: ["test_build"]
+  before_script:
+    - docker info
+    - docker login -u "${DOCKERHUB_USER}" -p "${DOCKERHUB_TOKEN}"
+  script:
+    - docker build -t "${DOCKERHUB_TAG}" .
+    - docker push "${DOCKERHUB_TAG}"
+
+push_src_on_github:
+  stage: push
+  image:
+    alpine:latest
+    #rules:
+    #  - if: $CI_COMMIT_BRANCH == "main"
+    #    changes:
+    #      - Dockerfile
+  needs: ["test_build"]
+  before_script:
+    - apk add git openssh-client
+    - eval $(ssh-agent -s)
+    - echo "${GITHUB_USER_PRIVATE_KEY}" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo -e "Host *\n\tUser ansible\n\tStrictHostKeyChecking no\n\tForwardAgent yes\n\n" > ~/.ssh/config
+    - git config --global user.email "${GITHUB_USER_EMAIL}"
+    - git config --global user.name "${GITHUB_USER}"
+    - git config --global init.defaultBranch main
+    - COMMENT=$(git log -1 --pretty=%B | head -1)
+  script:
+    - git clone git@github.com:${GITHUB_USER}/docker-molecule_${OS_TYPE}.git /tmp/docker-molecule_${OS_TYPE}
+    - rm -rf .git
+    - cp -r . /tmp/docker-molecule_${OS_TYPE}/
+    - cd /tmp/docker-molecule_${OS_TYPE}
+    - git add -A
+    - git commit -m "${COMMENT}" || echo "No changes, nothing to commit!"
+    - git push
