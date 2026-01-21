@@ -64,6 +64,8 @@ RUN ansible-galaxy collection install ansible.netcommon ansible.posix ansible.ut
 
 # Set Python interpreter for Ansible
 ENV ANSIBLE_PYTHON_INTERPRETER=/usr/bin/python3
+#ENV DOCKER_TLS_CERTDIR=""
+#ENV DOCKER_TLS_VERIFY="0"
 
 RUN sed -i "s/when: (lookup('env', 'HOME'))/when: lookup('env', 'HOME') | bool/" /usr/local/lib/python3.13/dist-packages/molecule_docker/playbooks/create.yml \
     && sed -i "s/when: (lookup('env', 'HOME'))/when: lookup('env', 'HOME') | bool/" /usr/local/lib/python3.13/dist-packages/molecule_docker/playbooks/destroy.yml
