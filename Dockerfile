@@ -56,7 +56,7 @@ RUN mkdir -p /usr/libexec/docker/cli-plugins \
 
 # Upgrade pip and install ansible + molecule
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
-RUN pip3 install --no-cache-dir ansible molecule molecule-docker docker ansible-lint flake8 yamllint
+RUN pip3 install --no-cache-dir ansible molecule molecule-docker docker ansible-lint flake8 yamllint jmespath
 
 # Install ansible collections
 RUN update-ca-certificates --fresh && export SSL_CERT_DIR=/etc/ssl/certs
